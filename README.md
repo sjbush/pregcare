@@ -1,7 +1,10 @@
-# pregcare_haplotyping
+# pregcare
 
-This repository contains the scripts used for haplotyping the long-read data in “The PREGCARE study: Personalised recurrence risk assessment following the birth of a child with a pathogenic _de novo_ mutation” by Bernkopf, Abdullah, _et al._
-The scripts, which should be run in numbered order, perform the following steps and have the following software prerequisites, which should be accessible on the command line. More specific detail on prerequisites is available as comments within the scripts themselves.
+This repository contains scripts used in “The PREGCARE study: Personalised recurrence risk assessment following the birth of a child with a pathogenic _de novo_ mutation” by Bernkopf, Abdullah, _et al._
+
+# Haplotyping
+
+The scripts used for haplotyping the long-read data, which should be run in numbered order, perform the following steps and have the following software prerequisites, which should be accessible on the command line. More specific detail on prerequisites is available as comments within the scripts themselves.
 
 **Script 1: split_fast5_among_subdirs.sh**
 
