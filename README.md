@@ -1,6 +1,6 @@
 # pregcare
 
-This repository contains scripts used in “The PREGCARE study: Personalised recurrence risk assessment following the birth of a child with a pathogenic _de novo_ mutation” by Bernkopf, Abdullah, _et al._
+This repository contains scripts used in [“The PREGCARE study: Personalised recurrence risk assessment following the birth of a child with a pathogenic _de novo_ mutation”](https://www.biorxiv.org/content/10.1101/2022.07.26.501520v1) by Bernkopf, Abdullah, _et al._
 
 # Haplotyping
 
