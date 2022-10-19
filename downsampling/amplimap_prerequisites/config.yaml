@@ -1,0 +1,19 @@
+general:
+ ignore_umis: true
+    
+parse_reads:
+  min_percentage_good: 0
+  umi_one: 0
+  umi_two: 0
+
+pileup:
+ min_mapq: 20
+ min_baseq: 30
+
+variants:
+  caller: gatk
+
+annotate:
+  annovar:
+    operations: g,r,f,f,f,f,f,f,f,f
+    protocols: refGene,genomicSuperDups,esp6500siv2_all,avsnp150,dbnsfp41a,clinvar_20210123,dbscsnv11,exac03,gnomad_genome,gnomad_exome
