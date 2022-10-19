@@ -4,7 +4,7 @@ use POSIX;
 
 # REQUIREMENTS
 my $basedir  = '/t1-data/project/pregcare/sbush';
-my $samtools = '/t1-data/project/GorielyLab2021/sbush/programs/samtools-1.12/bin/samtools';
+my $samtools = '/t1-data/project/GorielyLab2021/sbush/programs/samtools-1.16.1/bin/samtools';
 my $tabix    = '/t1-data/project/GorielyLab2021/sbush/programs/htslib-1.12/tabix';
 my $dbsnp    = '/t1-data/project/pregcare/sbush/dbSNP/dbSNP_153.hg38.vcf.gz';
 my $coords   = "$basedir/ont_coords.tsv";
@@ -79,7 +79,7 @@ foreach my $family (@sorted_family)
 	  my $child_bam = "$basedir/$child_ont/6.bam/$child_bc.bam";
 	  next if (!(-e($child_bam)));
 	  my $pileup = ''; my $read_ids = '';
-	  open(IN,"$samtools mpileup -r $snps_per_fam{$family}{chr}:$snps_per_fam{$family}{pos}-$snps_per_fam{$family}{pos} -aa $child_bam --output-QNAME 2> /dev/null |") or die $!;
+	  open(IN,"$samtools mpileup -r $snps_per_fam{$family}{chr}:$snps_per_fam{$family}{pos}-$snps_per_fam{$family}{pos} --no-output-ins --no-output-del --no-output-ends -aa $child_bam --output-QNAME 2> /dev/null |") or die $!;
 	  while(<IN>)
 		{ my $line = $_; chomp($line);
 		  my @line = split(/\t/,$line);
@@ -89,27 +89,17 @@ foreach my $family (@sorted_family)
 	  my @pileup   = split(//,$pileup);			  
 	  my @read_ids = split(",",$read_ids);
 	
-	  # iterate through @pileup and make a new pileup array, one where each entry has 1-to-1 correspondence with @read_ids. To do this, we must set to one side all sequences beginning \+[0-9]+[ACGTNacgtn]+. These refer to indels that *START FROM THE NEXT POSITION* - which means their QNAME will NOT be output HERE.
-	  my @new_pileup = ();
-	  my $skip = 0; my $entry_num_in_read_id_array = 0;
+	  # iterate through @pileup and make a new pileup array, one where each entry has 1-to-1 correspondence with @read_ids. To do this, we must set to one side all sequences beginning \+[0-9]. These refer to indels that *START FROM THE NEXT POSITION* - which means their QNAME will NOT be output HERE.
+	  my @new_pileup = (); my $entry_num_in_read_id_array = 0;
 	  for(my $x=0;$x<@pileup;$x++)
 		{ my $n = $pileup[$x];
-		  my $n1; if (defined($pileup[$x+1])) { $n1 = $pileup[$x+1]; }
-		  my $skip_this = 0;
-		  if ($skip > 0)
-			{ $skip--; $skip_this++; }
-		  elsif ($n =~ /^(\d+)$/)
-			{ $skip = $1; $skip_this++;
-			  if ( (defined($n1)) and ($n1 =~ /^(\d+)$/) )
-				{ $skip .= $1; $skip++; }
-			}
-		  next if ($skip_this > 0);
-		  next if (($n eq '+') or ($n eq '-')); # a sequence matching the regular expression \+[0-9]+[ACGTNacgtn]+ denotes an insertion of one or more bases *STARTING FROM THE NEXT POSITION* (if starting "\-", a deletion). For example, +2AG means insertion of AG in the forward strand and -2ct means deletion of CT in the reverse strand
-		  next if (($n eq '^') or ($n eq '$') or ($n eq '[') or ($n eq ']')); # ^ (caret) marks the start of a read segment. $ (dollar) marks the end of a read segment
+		  next if ($n =~ /^(\d+)$/);
+		  next if (($n eq '+') or ($n eq '-'));
 		  push(@new_pileup,$n); # most (but not all) $n at this point will be these: AGTCN (upper case), which denotes a base that did not match the reference on the forward strand and agtcn (lower case), which denotes a base that did not match the reference on the reverse strand. That these values of $n 'do not match the reference' is because in the call to mpileup, above, we have saved a little runtime by NOT specifying the reference genome (this means that for each base, the program won't check to see if it matches the reference or not). If we had specified then reference, then we would instead see values of $n that are either . (dot), which means a base that matched the reference on the forward strand, or , (comma), which means a base that matched the reference on the reverse strand.
 		  my $read_id = $read_ids[$entry_num_in_read_id_array];
 		  $entry_num_in_read_id_array++;
 		}
+
 	  if ($#new_pileup != $#read_ids)
 		{ print "FATAL ERROR with parsing the pileup of the child DNM (family $family): the size of the pileup line ($#pileup) and the number of read IDs ($#read_ids) does not match. pileup line: $pileup\n"; exit 1; }
 	  next if ($#new_pileup != $#read_ids);
@@ -138,7 +128,7 @@ foreach my $family (@sorted_family)
 		  my %reads_with_a_del = (); my %reads_without_a_del = ();
 		  for(my $pos=($start_of_deletion-1);$pos<=($end_of_deletion+1);$pos++)
 			{ my $pileup = ''; my $read_ids = '';
-			  open(IN,"$samtools mpileup -r $snps_per_fam{$family}{chr}:$pos-$pos -aa $child_bam --output-QNAME 2> /dev/null |") or die $!;
+			  open(IN,"$samtools mpileup -r $snps_per_fam{$family}{chr}:$pos-$pos -aa $child_bam --no-output-ins --no-output-del --no-output-ends --output-QNAME 2> /dev/null |") or die $!;
 			  while(<IN>)
 				{ my $line = $_; chomp($line);
 				  my @line = split(/\t/,$line);
@@ -147,21 +137,11 @@ foreach my $family (@sorted_family)
 			  close(IN) or die $!;
 			  my @pileup   = split(//,$pileup);			  
 			  my @read_ids = split(",",$read_ids);
-			  my $skip = 0; my $entry_num_in_read_id_array = 0;
+			  my $entry_num_in_read_id_array = 0;
 			  for(my $x=0;$x<@pileup;$x++)
 				{ my $n = $pileup[$x];
-				  my $n1; if (defined($pileup[$x+1])) { $n1 = $pileup[$x+1]; }
-				  my $skip_this = 0;
-				  if ($skip > 0)
-					{ $skip--; $skip_this++; }
-				  elsif ($n =~ /^(\d+)$/)
-					{ $skip = $1; $skip_this++;
-					  if ( (defined($n1)) and ($n1 =~ /^(\d+)$/) )
-						{ $skip .= $1; $skip++; }
-					}
-				  next if ($skip_this > 0);
-				  next if (($n eq '+') or ($n eq '-')); # a sequence matching the regular expression \+[0-9]+[ACGTNacgtn]+ denotes an insertion of one or more bases *STARTING FROM THE NEXT POSITION* (if starting "\-", a deletion). For example, +2AG means insertion of AG in the forward strand and -2ct means deletion of CT in the reverse strand
-				  next if (($n eq '^') or ($n eq '$') or ($n eq '[') or ($n eq ']')); # ^ (caret) marks the start of a read segment. $ (dollar) marks the end of a read segment
+				  next if ($n =~ /^(\d+)$/);
+				  next if (($n eq '+') or ($n eq '-'));
 				  my $read_id = $read_ids[$entry_num_in_read_id_array];
 				  if ($n eq '*') # * (asterisk) is a placeholder for a deleted base in a multiple basepair deletion that was mentioned in a previous line by the -[0-9]+[ACGTNacgtn]+ notation. IMPORTANT: the length of the deletion cannot be inferred from the presence of the *
 					{ $reads_with_a_del{$read_id}{$pos}++; }
@@ -169,6 +149,7 @@ foreach my $family (@sorted_family)
 					{ $reads_without_a_del{$read_id}{$pos}++; }
 				  $entry_num_in_read_id_array++;
 				}
+
 			}
 		  # reads that contain the DNM deletion must, by definition, have a * in the pileup for each base of the deletion AND no * in the first base of the deletion-1 AND no * in the last base of the deletion +1
 		  my %reads_containing_the_dnm_del = ();
@@ -185,8 +166,13 @@ foreach my $family (@sorted_family)
 			  if ($failure == 0)
 				{ $reads_containing_the_dnm_del{$read_id}++; }
 			}
+		  my %reads_not_containing_the_dnm_del = ();
+		  while((my $read_id,my $irrel)=each(%reads_without_a_del))
+			{ if (!(exists($reads_containing_the_dnm_del{$read_id})))
+				{ $reads_not_containing_the_dnm_del{$read_id}++; }
+			}
 		  $num_reads_containing_the_dnm_del = scalar keys %reads_containing_the_dnm_del;
-		  $num_reads_calling_a_base_not_a_del = scalar keys %reads_without_a_del;
+		  $num_reads_calling_a_base_not_a_del = scalar keys %reads_not_containing_the_dnm_del;
 		  %dnm_read_ids_ALT = %reads_containing_the_dnm_del;
 		  %dnm_read_ids_REF = %reads_without_a_del;
 		}
@@ -202,7 +188,7 @@ foreach my $family (@sorted_family)
 		  my %bases_per_read_id   = ();
 		  for(my $pos=$start_of_insertion;$pos<=$end_of_insertion+1;$pos++)
 			{ my $pileup = ''; my $read_ids = '';
-			  open(IN,"$samtools mpileup -r $snps_per_fam{$family}{chr}:$pos-$pos -aa $child_bam --output-QNAME 2> /dev/null |") or die $!;
+			  open(IN,"$samtools mpileup -r $snps_per_fam{$family}{chr}:$pos-$pos -aa $child_bam --no-output-ins --no-output-del --no-output-ends --output-QNAME 2> /dev/null |") or die $!;
 			  while(<IN>)
 				{ my $line = $_; chomp($line);
 				  my @line = split(/\t/,$line);
@@ -211,21 +197,11 @@ foreach my $family (@sorted_family)
 			  close(IN) or die $!;
 			  my @pileup   = split(//,$pileup);			  
 			  my @read_ids = split(",",$read_ids);
-			  my $skip = 0; my $entry_num_in_read_id_array = 0;
+			  my $entry_num_in_read_id_array = 0;
 			  for(my $x=0;$x<@pileup;$x++)
 				{ my $n = $pileup[$x];
-				  my $n1; if (defined($pileup[$x+1])) { $n1 = $pileup[$x+1]; }
-				  my $skip_this = 0;
-				  if ($skip > 0)
-					{ $skip--; $skip_this++; }
-				  elsif ($n =~ /^(\d+)$/)
-					{ $skip = $1; $skip_this++;
-					  if ( (defined($n1)) and ($n1 =~ /^(\d+)$/) )
-						{ $skip .= $1; $skip++; }
-					}
-				  next if ($skip_this > 0);
+				  next if ($n =~ /^(\d+)$/);
 				  next if (($n eq '+') or ($n eq '-'));
-				  next if (($n eq '^') or ($n eq '$') or ($n eq '[') or ($n eq ']'));
 				  my $read_id = $read_ids[$entry_num_in_read_id_array];
 				  if ($n =~ /^[ATCG]$/) { $bases_per_read_id{$read_id}{$pos} = $n; }
 				  $entry_num_in_read_id_array++;
@@ -403,7 +379,7 @@ foreach my $family (@sorted_family)
 			  my $parent_bam = "$basedir/$ont/6.bam/$parent_bc.bam";
 			  if (!(-e($parent_bam))) { print "ERROR: unable to find the BAM for the $person of $family at $parent_bam\n"; exit 1; }
 			  my $pileup = ''; my $read_ids = '';
-			  open(IN,"$samtools mpileup -r $snps_per_fam{$family}{chr}:$pos-$pos -aa $parent_bam --output-QNAME 2> /dev/null |") or die $!;
+			  open(IN,"$samtools mpileup -r $snps_per_fam{$family}{chr}:$pos-$pos -aa $parent_bam --no-output-ins --no-output-del --no-output-ends --output-QNAME 2> /dev/null |") or die $!;
 			  while(<IN>)
 				{ my $line = $_; chomp($line);
 				  my @line = split(/\t/,$line);
@@ -415,21 +391,11 @@ foreach my $family (@sorted_family)
 			  
 			  # iterate through the parent's @pileup and make a new pileup array, one where each entry has 1-to-1 correspondence with @read_ids. To do this, we must set to one side all sequences beginning \+[0-9]+[ACGTNacgtn]+. These refer to indels that *START FROM THE NEXT POSITION* - which means their QNAME will NOT be output HERE.
 			  my @new_pileup = ();
-			  my $skip = 0; my $entry_num_in_read_id_array = 0;
+			  my $entry_num_in_read_id_array = 0;
 			  for(my $x=0;$x<@pileup;$x++)
 				{ my $n = $pileup[$x];
-				  my $n1; if (defined($pileup[$x+1])) { $n1 = $pileup[$x+1]; }
-				  my $skip_this = 0;
-				  if ($skip > 0)
-					{ $skip--; $skip_this++; }
-				  elsif ($n =~ /^(\d+)$/)
-					{ $skip = $1; $skip_this++;
-					  if ( (defined($n1)) and ($n1 =~ /^(\d+)$/) )
-						{ $skip .= $1; $skip++; }
-					}
-				  next if ($skip_this > 0);
+				  next if ($n =~ /^(\d+)$/);
 				  next if (($n eq '+') or ($n eq '-')); # a sequence matching the regular expression \+[0-9]+[ACGTNacgtn]+ denotes an insertion of one or more bases *STARTING FROM THE NEXT POSITION* (if starting "\-", a deletion). For example, +2AG means insertion of AG in the forward strand and -2ct means deletion of CT in the reverse strand
-				  next if (($n eq '^') or ($n eq '$') or ($n eq '[') or ($n eq ']')); # ^ (caret) marks the start of a read segment. $ (dollar) marks the end of a read segment
 				  push(@new_pileup,$n); # most (but not all) $n at this point will be these: AGTCN (upper case), which denotes a base that did not match the reference on the forward strand and agtcn (lower case), which denotes a base that did not match the reference on the reverse strand. That these values of $n 'do not match the reference' is because in the call to mpileup, above, we have saved a little runtime by NOT specifying the reference genome (this means that for each base, the program won't check to see if it matches the reference or not). If we had specified then reference, then we would instead see values of $n that are either . (dot), which means a base that matched the reference on the forward strand, or , (comma), which means a base that matched the reference on the reverse strand.
 				  my $read_id = $read_ids[$entry_num_in_read_id_array];
 				  $entry_num_in_read_id_array++;
@@ -507,7 +473,7 @@ foreach my $family (@sorted_family)
 		  print OUT1 "genotype of mother: $genotype_mother\n";
 		  print OUT1 "genotype of father: $genotype_father\n";
 		  my $pileup = ''; my $read_ids = '';
-		  open(IN,"$samtools mpileup -r $snps_per_fam{$family}{chr}:$pos-$pos -aa $child_bam --output-QNAME 2> /dev/null |") or die $!;
+		  open(IN,"$samtools mpileup -r $snps_per_fam{$family}{chr}:$pos-$pos -aa $child_bam --no-output-ins --no-output-del --no-output-ends --output-QNAME 2> /dev/null |") or die $!;
 		  while(<IN>)
 			{ my $line = $_; chomp($line);
 			  my @line = split(/\t/,$line);
@@ -519,21 +485,11 @@ foreach my $family (@sorted_family)
 		  
 		  # iterate through the child's @pileup - for the phasingSNP locus - and make a new pileup array, one where each entry has 1-to-1 correspondence with @read_ids. To do this, we must set to one side all sequences beginning \+[0-9]+[ACGTNacgtn]+. These refer to indels that *START FROM THE NEXT POSITION* - which means their QNAME will NOT be output HERE.
 		  my @new_pileup = ();
-		  my $skip = 0; my $entry_num_in_read_id_array = 0;
+		  my $entry_num_in_read_id_array = 0;
 		  for(my $x=0;$x<@pileup;$x++)
 			{ my $n = $pileup[$x];
-			  my $n1; if (defined($pileup[$x+1])) { $n1 = $pileup[$x+1]; }
-			  my $skip_this = 0;
-			  if ($skip > 0)
-				{ $skip--; $skip_this++; }
-			  elsif ($n =~ /^(\d+)$/)
-				{ $skip = $1; $skip_this++;
-				  if ( (defined($n1)) and ($n1 =~ /^(\d+)$/) )
-					{ $skip .= $1; $skip++; }
-				}
-			  next if ($skip_this > 0);
+			  next if ($n =~ /^(\d+)$/);
 			  next if (($n eq '+') or ($n eq '-')); # a sequence matching the regular expression \+[0-9]+[ACGTNacgtn]+ denotes an insertion of one or more bases *STARTING FROM THE NEXT POSITION* (if starting "\-", a deletion). For example, +2AG means insertion of AG in the forward strand and -2ct means deletion of CT in the reverse strand
-			  next if (($n eq '^') or ($n eq '$') or ($n eq '[') or ($n eq ']')); # ^ (caret) marks the start of a read segment. $ (dollar) marks the end of a read segment
 			  push(@new_pileup,$n); # most (but not all) $n at this point will be these: AGTCN (upper case), which denotes a base that did not match the reference on the forward strand and agtcn (lower case), which denotes a base that did not match the reference on the reverse strand. That these values of $n 'do not match the reference' is because in the call to mpileup, above, we have saved a little runtime by NOT specifying the reference genome (this means that for each base, the program won't check to see if it matches the reference or not). If we had specified then reference, then we would instead see values of $n that are either . (dot), which means a base that matched the reference on the forward strand, or , (comma), which means a base that matched the reference on the reverse strand.
 			  my $read_id = $read_ids[$entry_num_in_read_id_array];
 			  $entry_num_in_read_id_array++;
