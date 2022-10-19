@@ -83,3 +83,21 @@ As with script 8, this script takes as input the metadata file ont_coords.tsv pl
 * Inheritance of the DNM is then resolved by considering which of the two alleles for the phasing SNP, REF or ALT, were disproportionately found on the same read as the DNM ALT.
 
 The output of this script is the 2x2 count table (from which we perform Fisher’s exact test) and a table detailing, per family ID, the contents of each DNM’s phase set and predicted inheritance. The format of this table is as described for script 8.
+
+# Downsampling
+
+The scripts in this subdirectory are used for downsampling the short-read (MiSeq) data for two mosaic families with low-frequency de novo mutations (FAM27 and FAM34). Scripts should be run in numbered order and collectively perform the following analysis.
+
+As described in [the paper](https://www.biorxiv.org/content/10.1101/2022.07.26.501520v1), the MiSeq data were originally analyzed using [Amplimap](https://github.com/koelling/amplimap) to obtain both the VAF of each family-specific mutation and the total count of >Q30 bases at the corresponding genomic position in each PCR replicate and sample.
+
+For each replicate and sample, Amplimap produces a BAM (**script 1**). Using samtools ‘depth’ with parameters -d 0 -r, we determined the median sequencing depth across all positions of the target region (**script 2**).
+
+We then downsampled each BAM to x-fold coverage per base, where x was 25, 100, 500, and 1000, every multiple of 1000 to 10,000, plus 15,000 and 20,000 (i.e. downsampling to 15 different depths) (**script 2**).
+
+Downsampling was performed 10 times per depth using [Picard](https://broadinstitute.github.io/picard/) DownsampleSam with parameters --STRATEGY HighAccuracy and --P, where P (the probability of retaining a given read when iterating through the BAM) was equal to desired fold depth / median sequencing depth. Samples where P was either not a number or a number > 1 (indicative of a failed, low- or zero-depth, sample) were discarded. To facilitate reproducibility, seeds were not randomly generated but manually assigned: 123, 456, 789, 234, 567, 891, 321, 654, 987, and 432.
+
+Finally, for each PCR replicate, sample, fold depth and seed, we re-ran Amplimap ‘pileups’ but in ‘mapped_bams_in’ mode (**script 2**).
+
+This produced, for each PCR replicate, sample, fold depth and seed, an Amplimap output file, pileups_long_detailed.csv. These files were combined into a single output file per family (script 3), from which we corrected VAFs using **scripts 4 and 5**.
+
+To visualise this data, boxplots were created using **script 6**. This reproduces Supplementary Figure S3 of the paper.
